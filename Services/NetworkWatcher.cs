@@ -11,17 +11,36 @@ namespace NetworkWatcher.Services
     public class NetworkWatcherService
     {
         public event EventHandler<NetEvent> NetworkChanged;
+        public event EventHandler<bool> ServiceStatusChanged;
 
         private string _lastAdapterId;
         private string _lastAdapterType;
         private string _lastIpv4;
         private string _lastSsid;
         private bool _lastInternet;
+        private bool _isRunning;
 
         public void Start()
         {
+            if (_isRunning) return;
             NetworkChange.NetworkAvailabilityChanged += OnAvailabilityChanged;
             NetworkChange.NetworkAddressChanged += OnAddressChanged;
+
+            _isRunning = true;
+            ServiceStatusChanged?.Invoke(this, true);
+
+            PrintEvent("network.init"); // boshlang'ich holatini ko'rsata olishim uchun
+        }
+
+        public void Stop()
+        {
+            if (!_isRunning) return;
+
+            NetworkChange.NetworkAvailabilityChanged -= OnAvailabilityChanged;
+            NetworkChange.NetworkAddressChanged -= OnAddressChanged;
+
+            _isRunning = false;
+            ServiceStatusChanged?.Invoke(this, false);
         }
 
         private void OnAvailabilityChanged(object sender, NetworkAvailabilityEventArgs e)
@@ -160,7 +179,7 @@ namespace NetworkWatcher.Services
             }
             catch
             {
-                
+
             }
 
             return null;

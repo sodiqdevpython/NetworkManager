@@ -15,8 +15,14 @@ namespace NetworkWatcher
                 Console.WriteLine(JsonHelper.ToJson(evt));
             };
 
+            watcher.ServiceStatusChanged += (sender, running) =>
+            {
+                Console.WriteLine("[Network Watcher] " + (running ? "Started" : "Stopped"));
+            };
+
             watcher.Start();
             Console.ReadLine();
+            watcher.Stop();
         }
     }
 }
