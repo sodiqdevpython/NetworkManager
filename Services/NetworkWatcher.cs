@@ -1,10 +1,9 @@
-﻿using NetworkWatcher.Models;
+﻿using Microsoft.Win32;
+using NetworkWatcher.Models;
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Text.RegularExpressions;
 
 namespace NetworkWatcher.Services
 {
@@ -90,7 +89,8 @@ namespace NetworkWatcher.Services
                         Adapter = _lastAdapterType,
                         Ssid = _lastSsid,
                         Ipv4 = _lastIpv4,
-                        Internet = false
+                        Internet = false,
+                        Vpn = CheckVpnActive(_lastSsid)
                     };
                     NetworkChanged?.Invoke(this, downEvent);
                 }
@@ -122,7 +122,8 @@ namespace NetworkWatcher.Services
                     Adapter = adapter.NetworkInterfaceType.ToString(),
                     Ssid = ssid,
                     Ipv4 = ipv4,
-                    Internet = internet
+                    Internet = internet,
+                    Vpn = CheckVpnActive(_lastSsid)
                 };
 
                 NetworkChanged?.Invoke(this, netEvent);
@@ -154,35 +155,64 @@ namespace NetworkWatcher.Services
         // wifi ssd ni olayabman wlan show interfaces dan
         private string GetWifiSsid()
         {
-            try
+            var info = WifiInfoModule.GetConnectedWifi();
+            if (info == null)
             {
-                var psi = new ProcessStartInfo
+                Console.WriteLine("Wifi ssid ni olib bo'lmadi");
+                return null;
+            }
+            else
+            {
+                Console.WriteLine($"SSID = {info.SSID}");
+                return info.SSID;
+            }
+        }
+
+        private bool CheckVpnActive(string ssid)
+        {
+            bool CheckIsInActiveInterface = NetworkInterface.GetAllNetworkInterfaces()
+                .Any(nic =>
+                    nic.OperationalStatus == OperationalStatus.Up &&
+                    (nic.Description.ToLower().Contains("vpn") ||
+                     nic.Name.ToLower().Contains("vpn")));
+
+            if (CheckIsInActiveInterface)
+            {
+                Console.WriteLine($"1-shartga tushdi: {CheckIsInActiveInterface}");
+                return true;
+            }
+            else if (!string.IsNullOrEmpty(ssid) && CheckGPS() == false)
+            {
+                Console.WriteLine($"2-shartga tushdi, a={string.IsNullOrEmpty(ssid)}, ");
+                return true;
+            }
+            Console.WriteLine("Hech qaysi shartga tushmadi");
+            return false;
+
+        }
+
+        private bool CheckGPS()
+        {
+            const string keyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location";
+            using (RegistryKey baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+            using (RegistryKey key = baseKey.OpenSubKey(keyPath))
+            {
+                if (key != null)
                 {
-                    FileName = "netsh",
-                    Arguments = "wlan show interfaces",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using (var p = Process.Start(psi))
-                {
-                    string output = p.StandardOutput.ReadToEnd();
-                    p.WaitForExit();
-
-                    var match = Regex.Match(output, @"^\s*SSID\s*:\s*(.+)$",
-                        RegexOptions.Multiline | RegexOptions.IgnoreCase);
-
-                    if (match.Success)
-                        return match.Groups[1].Value.Trim();
+                    string value = key.GetValue("Value")?.ToString() ?? "Unknown";
+                    if(value == "Deny")
+                    {
+                        Console.WriteLine(value);
+                        return false;
+                    }
+                    else
+                    {
+                        return true;
+                    }
                 }
             }
-            catch
-            {
-
-            }
-
-            return null;
+            return false;
         }
+
     }
 }
